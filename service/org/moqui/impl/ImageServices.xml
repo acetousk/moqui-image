@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+This software is in the public domain under CC0 1.0 Universal plus a
+Grant of Patent License.
+
+To the extent possible under law, the author(s) have dedicated all
+copyright and related and neighboring rights to this software to the
+public domain worldwide. This software is distributed without any
+warranty.
+
+You should have received a copy of the CC0 Public Domain Dedication
+along with this software (see the LICENSE.md file). If not, see
+<http://creativecommons.org/publicdomain/zero/1.0/>.
+-->
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="convert" noun="Image">
+        <description>Convert an image from one type to another. See for reference: https://www.baeldung.com/java-copy-file</description>
+        <in-parameters>
+            <parameter name="inputImage" type="java.io.File"/>
+            <parameter name="outputImageFormat"><description>Supports the values: </description></parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="outputImage" type="java.io.File" required="true"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import org.apache.commons.fileupload.FileItem
+
+                import javax.imageio.*
+                import java.awt.image.BufferedImage
+
+                import java.io.File
+                import java.nio.file.Files
+
+//                try {
+//                    // Get the reader
+//                    Iterator<ImageReader> readers = ImageIO.getImageReadersByMIMEType(inputImage.getContentType());
+////                    while (readers.hasNext()) {
+////                        ec.logger.warn("reader: " + readers.next());
+////                    }
+//                    ImageReader reader = readers?.next();
+//                } catch (Exception exp) {
+//                    exp.printStackTrace();
+//                }
+
+//                try {
+//                    // Get the writer
+//                    Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName(outputImageFormat);
+////                    while (writers.hasNext()) {
+////                        ec.logger.warn("writers: " + writers.next());
+////                    }
+//                    ImageWriter writer = writers?.next();
+//                } catch (Exception exp) {
+//                    exp.printStackTrace();
+//                }
+
+                File outputImage = inputImage.createTempFile('processed', '.' + outputImageFormat, inputImage?.getParentFile())
+
+                try {
+                    InputStream inputImageStream = Files.newInputStream(inputImage.toPath())
+                    BufferedImage image = ImageIO.read(inputImageStream)
+
+                    OutputStream outputImageStream = Files.newOutputStream(outputImage.toPath())
+                    if (!ImageIO.write(image, outputImageFormat, outputImageStream)) {
+                        ec.logger.error("Could not write image")
+                    }
+
+                } catch (Exception exp) {
+                    exp.printStackTrace();
+                } finally {
+                    inputImageStream.close();
+                    outputImageStream.flush();
+                    outputImageStream.close();
+                }
+
+                ]]></script>
+            <log level="warn" message="inputImage?.getParent() ${inputImage?.getParent()} outputImage?.getParent() ${outputImage?.getParent()}"/>
+            <log level="warn" message="inputImage?.getPath() ${inputImage?.getPath()} outputImage?.getPath() ${outputImage?.getPath()}"/>
+            <log level="warn" message="Files.probeContentType(inputImage?.toPath()) ${Files.probeContentType(inputImage?.toPath())} Files.probeContentType(outputImage?.toPath()) ${Files.probeContentType(outputImage?.toPath())}"/>
+            <log level="warn" message="outputImageFormat ${outputImageFormat}"/>
+            <log level="warn" message="Files.size(inputImage?.toPath()) ${Files.size(inputImage?.toPath())} Files.size(outputImage?.toPath()) ${Files.size(outputImage?.toPath())}"/>
+        </actions>
+    </service>
+</services>
