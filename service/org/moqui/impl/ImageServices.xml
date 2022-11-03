@@ -17,69 +17,156 @@ along with this software (see the LICENSE.md file). If not, see
     <service verb="convert" noun="Image">
         <description>Convert an image from one type to another. See for reference: https://www.baeldung.com/java-copy-file</description>
         <in-parameters>
-            <parameter name="inputImage" type="java.io.File"/>
-            <parameter name="outputImageFormat"><description>Supports the values: </description></parameter>
+            <parameter name="inputImageItem" type="org.apache.commons.fileupload.FileItem" required="true"/>
+            <parameter name="outputImageFormat" required="true"><description>Supports the values: </description></parameter>
         </in-parameters>
         <out-parameters>
             <parameter name="outputImage" type="java.io.File" required="true"/>
         </out-parameters>
         <actions>
+            <set field="inputImage" from="inputImageItem.getStoreLocation()"/>
+            <!-- Create temporary file to convert into -->
+            <set field="outputImage" from="inputImage.createTempFile('processed', '.' + outputImageFormat, inputImage.getParentFile())"/>
+            <log level="warn" message="inputImage?.getParent() ${inputImage?.getParent()}"/>
+            <log level="warn" message="inputImage?.getPath() ${inputImage?.getPath()}"/>
+            <log level="warn" message="inputImageItem?.getContentType() ${inputImageItem?.getContentType()}"/>
+            <log level="warn" message="Files.probeContentType(inputImage?.toPath()) ${Files.probeContentType(inputImage?.toPath())}"/>
+            <log level="warn" message="Files.size(inputImage?.toPath()) ${Files.size(inputImage?.toPath())}"/>
             <script><![CDATA[
                 import org.apache.commons.fileupload.FileItem
 
                 import javax.imageio.*
+                import java.awt.Color
                 import java.awt.image.BufferedImage
 
                 import java.io.File
                 import java.nio.file.Files
 
+                //                // Create input stream (in try-with-resource block to avoid leaks)
+//                try (ImageInputStream input = ImageIO.createImageInputStream(inputImage)) {
+//                    // Get the reader
+//                    Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+//
+//                    if (!readers.hasNext()) {
+//                        throw new IllegalArgumentException("No reader for: " + file);
+//                    }
+//
+//                    ImageReader reader = readers.next();
+//
+//                    try {
+//                        reader.setInput(input);
+//
+//                        // Optionally, listen for read warnings, progress, etc.
+////                        reader.addIIOReadWarningListener(...);
+////                        reader.addIIOReadProgressListener(...);
+//
+//                        ImageReadParam readParam = reader.getDefaultReadParam();
+//
+//                        // Optionally, control read settings like sub sampling, source region or destination etc.
+////                        readParam.setSourceSubsampling(...);
+////                        readParam.setSourceRegion(...);
+////                        readParam.setDestination(...);
+//                        // ...
+//
+//                        // Finally read the image, using settings from readParam
+//                        BufferedImage image = reader.read(0, readParam);
+//
+//                        // Optionally, read thumbnails, meta data, etc...
+////                        int numThumbs = reader.getNumThumbnails(0);
+//                        // ...
+//
+//                        // Get the writer
+//                        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName(outputImageFormat);
+//
+//                        if (!writers.hasNext()) {
+//                            throw new IllegalArgumentException("No writer for: " + outputImageFormat);
+//                        }
+//
+//                        ImageWriter writer = writers.next();
+//
+//                        try {
+//                            // Create output stream (in try-with-resource block to avoid leaks)
+//                            try (ImageOutputStream output = ImageIO.createImageOutputStream(outputImage)) {
+//                                writer.setOutput(output);
+//
+//                                // Optionally, listen to progress, warnings, etc.
+//
+//                                ImageWriteParam outputParam = writer.getDefaultWriteParam();
+//
+//                                // Optionally, control format specific settings of outputParam (requires casting), or
+//                                // control generic write settings like sub sampling, source region, output type etc.
+//
+//                                // Optionally, provide thumbnails and image/stream metadata
+////                                writer.write(..., new IIOImage(..., image, ...), outputParam);
+//
+////                                Iterator<ImageTranscoder> transcoders = ImageIO.getImageTranscoders(reader, writer);
+////
+////                                if (!transcoders.hasNext()) {
+////                                    throw new IllegalArgumentException("No transcoder from: " + input?.getFormatName() + " to: " + outputImageFormat);
+////                                }
+////
+////                                ImageTranscoder transcoder = transcoders.next();
+//
+//
+//                            }
+//                        }
+//                        finally {
+//                            // Dispose writer in finally block to avoid memory leaks
+//                            writer.dispose();
+//                        }
+//
+//                    }
+//                    finally {
+//                        // Dispose reader in finally block to avoid memory leaks
+//                        reader.dispose();
+//                    }
+//                }
+
+                BufferedImage image = ImageIO.read(inputImage)
+                BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+                result.createGraphics().drawImage(image, 0, 0, Color.WHITE, null)
+                ImageIO.write(result, outputImageFormat, outputImage)
+
+                // Handle image not written case
+//                    ec.logger.error('Error writing image')
+
 //                try {
 //                    // Get the reader
-//                    Iterator<ImageReader> readers = ImageIO.getImageReadersByMIMEType(inputImage.getContentType());
+//                    Iterator<ImageReader> readers = ImageIO.getImageReadersByMIMEType(inputImageItem?.getContentType());
 ////                    while (readers.hasNext()) {
 ////                        ec.logger.warn("reader: " + readers.next());
 ////                    }
 //                    ImageReader reader = readers?.next();
-//                } catch (Exception exp) {
-//                    exp.printStackTrace();
-//                }
-
-//                try {
+//
+//                    // Read the image into a buffered image
+//                    InputStream inputImageStream = Files.newInputStream(inputImage.toPath())
+//                    BufferedImage image = reader.read(inputImageStream)
+//
 //                    // Get the writer
 //                    Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName(outputImageFormat);
 ////                    while (writers.hasNext()) {
 ////                        ec.logger.warn("writers: " + writers.next());
 ////                    }
 //                    ImageWriter writer = writers?.next();
+//
+//                    // Write the image into the temporary file
+//                    OutputStream outputImageStream = Files.newOutputStream(outputImage.toPath())
+//                    if (!writer.write(image, outputImageFormat, outputImageStream)) {
+//                        ec.logger.error("Could not write image")
+//                    }
 //                } catch (Exception exp) {
 //                    exp.printStackTrace();
+//                } finally {
+//                    inputImageStream?.close();
+//                    outputImageStream?.flush();
+//                    outputImageStream?.close();
 //                }
-
-                File outputImage = inputImage.createTempFile('processed', '.' + outputImageFormat, inputImage?.getParentFile())
-
-                try {
-                    InputStream inputImageStream = Files.newInputStream(inputImage.toPath())
-                    BufferedImage image = ImageIO.read(inputImageStream)
-
-                    OutputStream outputImageStream = Files.newOutputStream(outputImage.toPath())
-                    if (!ImageIO.write(image, outputImageFormat, outputImageStream)) {
-                        ec.logger.error("Could not write image")
-                    }
-
-                } catch (Exception exp) {
-                    exp.printStackTrace();
-                } finally {
-                    inputImageStream.close();
-                    outputImageStream.flush();
-                    outputImageStream.close();
-                }
-
                 ]]></script>
-            <log level="warn" message="inputImage?.getParent() ${inputImage?.getParent()} outputImage?.getParent() ${outputImage?.getParent()}"/>
-            <log level="warn" message="inputImage?.getPath() ${inputImage?.getPath()} outputImage?.getPath() ${outputImage?.getPath()}"/>
-            <log level="warn" message="Files.probeContentType(inputImage?.toPath()) ${Files.probeContentType(inputImage?.toPath())} Files.probeContentType(outputImage?.toPath()) ${Files.probeContentType(outputImage?.toPath())}"/>
             <log level="warn" message="outputImageFormat ${outputImageFormat}"/>
-            <log level="warn" message="Files.size(inputImage?.toPath()) ${Files.size(inputImage?.toPath())} Files.size(outputImage?.toPath()) ${Files.size(outputImage?.toPath())}"/>
+            <log level="warn" message="outputImage?.getParent() ${outputImage?.getParent()}"/>
+            <log level="warn" message="outputImage?.getPath() ${outputImage?.getPath()}"/>
+            <log level="warn" message="Files.probeContentType(outputImage?.toPath()) ${Files.probeContentType(outputImage?.toPath())}"/>
+            <log level="warn" message="Files.size(outputImage?.toPath()) ${Files.size(outputImage?.toPath())}"/>
         </actions>
     </service>
 </services>
