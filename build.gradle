@@ -50,8 +50,11 @@ tasks.withType(GroovyCompile) { options.compilerArgs << "-proc:none" }
 dependencies {
     implementation project(':framework')
 
-    // https://mvnrepository.com/artifact/com.twelvemonkeys.imageio/imageio-jpeg
+    // https://mvnrepository.com/artifact/com.twelvemonkeys.imageio
     implementation 'com.twelvemonkeys.imageio:imageio-jpeg:3.9.3'
+    implementation 'com.twelvemonkeys.imageio:imageio-batik:3.9.3' // svg support
+    implementation 'com.twelvemonkeys.imageio:imageio-tiff:3.9.3'
+    implementation 'com.twelvemonkeys.imageio:imageio-webp:3.9.3'
 }
 
 // by default the Java plugin runs test on build, change to not do that (only run test if explicit task)
