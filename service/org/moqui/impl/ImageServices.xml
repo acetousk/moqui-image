@@ -18,95 +18,153 @@ along with this software (see the LICENSE.md file). If not, see
         <description>Convert an image from one type to another. See for reference: https://www.baeldung.com/java-copy-file</description>
         <in-parameters>
             <parameter name="inputImageStream" type="java.io.InputStream" required="true"/>
-            <parameter name="outputResourceReference" type="org.moqui.resource.ResourceReference"/>
-            <parameter name="outputImageFormat" required="true"><description>Supports the values: jpg, png, tiff, webp, gif</description></parameter>
+            <parameter name="outputResourceReference" type="org.moqui.resource.ResourceReference" required="true"/>
+            <parameter name="outputImageFormat" required="true"><description>Supports the values: jpg, png, tiff, webp, bmp, wbmp</description></parameter>
+            <parameter name="outputImagePixelWidth" type="Integer"><description>Defaults to inputImageStream's pixel width. Aspect ratio is kept by default.</description></parameter>
         </in-parameters>
         <out-parameters>
         </out-parameters>
         <actions>
-<!--            <set field="inputImage" from="inputImageItem.getStoreLocation()"/>-->
-            <!-- Create temporary file to convert into -->
-<!--            <set field="outputImage" from="inputImage.createTempFile('processed', '.' + outputImageFormat, inputImage.getParentFile())"/>-->
-
-
-<!--            <set field="outputImageStream" type="java.io.OutputStream"/>-->
-<!--            <set field="inputDbResourceStream" type="java.io.InputStream" from="outputResourceReference.openStream()"/>-->
-            <!-- See why PipedOutputStream and PipedInputStream here: https://stackoverflow.com/questions/5778658/how-to-convert-outputstream-to-inputstream -->
             <script><![CDATA[
-                import org.fit.cssbox.css.Output
-                import org.moqui.util.ObjectUtilities
-
                 import javax.imageio.*
+                import javax.imageio.metadata.IIOMetadata
                 import java.awt.Color
                 import java.awt.image.BufferedImage
-                import java.io.PipedInputStream
-                import java.io.PipedOutputStream
-
-                import java.nio.file.Files
+                import java.awt.image.BufferedImageOp
+                import com.twelvemonkeys.image.ResampleOp
+                import javax.imageio.stream.ImageInputStream
+                import javax.imageio.stream.ImageOutputStream
 
                 // Thanks to https://stackoverflow.com/questions/2290336/converting-png-into-jpeg for the great example maybe also see: https://stackoverflow.com/questions/464825/converting-transparent-gif-png-to-jpeg-using-java
-//                try {
+                OutputStream outputImageStream = new ByteArrayOutputStream()
+//                BufferedImage image = ImageIO.read(inputImageStream)
+                BufferedImage image = null
+                ImageReader reader = null
+                IIOMetadata readMetadata = null
 
-//                ec.logger.warn("outputResourceReference.getLocation() == null ${outputResourceReference.getLocation() == null}")
-//                ec.logger.warn("outputResourceReference.getLocation() ${outputResourceReference.getLocation()}")
-//                dbresourceInputStream = outputResourceReference.openStream();
-//                ec.logger.warn("dbresourceInputStream == null ${dbresourceInputStream == null}")
+                // Create input stream (in try-with-resource block to avoid leaks)
+                try (ImageInputStream input = ImageIO.createImageInputStream(inputImageStream)) {
 
-//                outputImageStream = new ByteArrayOutputStream(dbresourceInputStream);
-                // in a background thread, write the given output stream to the
-                // PipedOutputStream for consumption
-//                new Thread(() -> {originalOutputStream.writeTo(outputImageStream);}).start();
+                    // Get the reader
+                    Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
 
-//                File outputFile = File.createTempFile("processed", "." + outputImageFormat)
+                    if (!readers.hasNext()) {
+                        throw new IllegalArgumentException("No reader for: " + file);
+                    }
 
-//                try {
-//                    BufferedImage image = ImageIO.read(inputImageStream)
+                    reader = readers.next();
+
+                    try {
+                        reader.setInput(input, true, false);
+
+                        // Optionally, listen for read warnings, progress, etc.
+//                        reader.addIIOReadWarningListener(...);
+//                        reader.addIIOReadProgressListener(...);
+
+                        ImageReadParam param = reader.getDefaultReadParam();
+
+                        // Optionally, control read settings like sub sampling, source region or destination etc.
+//                        param.setSourceSubsampling(...);
+//                        param.setSourceRegion(...);
+//                        param.setDestination(...);
+                        // ...
+
+                        // Finally read the image, using settings from param
+                        image = reader.read(0, param);
+
+                        // Optionally, read thumbnails, meta data, etc...
+//                        int numThumbs = reader.getNumThumbnails(0);
+                        readMetadata = reader.getImageMetadata(0)
+                        // ...
+                    }
+                    finally {
+                        // Dispose reader in finally block to avoid memory leaks
+                        reader.dispose();
+                        // Close input stream
+                        inputImageStream.close();
+                    }
+                }
+
+//                ec.logger.warn("image type ${image.getType()}")
+//                ec.logger.info("Resampling image from ${image.getWidth()} to ${outputImagePixelWidth} pixels wide and ${image.getHeight()} to ${outputImagePixelWidth * image.getHeight() / image.getWidth()} with an aspect ratio of ${image.getWidth()/image.getHeight()}")
+
+//                if (outputImagePixelWidth) {
+//                    // aspect ratio = pixel width / pixel height so new pixel height = new pixel width / aspect ratio if aspect ratio is pixel width / pixel height then new pixel height = new pixel width * (pixel height / pixel width)
+//                    ec.logger.info("Resampling image from ${image.getWidth()} to ${outputImagePixelWidth} pixels wide and ${image.getHeight()} to ${outputImagePixelWidth * image.getHeight() / image.getWidth()} with an aspect ratio of ${image.getWidth()/image.getHeight()}")
+//                    BufferedImageOp resampler = new ResampleOp(outputImagePixelWidth, (outputImagePixelWidth * image.getHeight() / image.getWidth()).intValue(), ResampleOp.FILTER_LANCZOS); // A good default filter, see class documentation for more info
+//                    image = resampler.filter(image, null);
+//                }
+
+                // Get the writer
+                Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName(outputImageFormat);
+
+                if (!writers.hasNext()) {
+                    throw new IllegalArgumentException("No writer for: " + outputImageFormat);
+                }
+
+                ImageWriter writer = writers.next();
+
+                Iterator<ImageTranscoder> transcoders = ImageIO.getImageTranscoders(reader, writer)
+
+//                ec.logger.warn("readMetadata.getMetadataFormatNames() ${readMetadata.getMetadataFormatNames()}")
+//                ec.logger.warn("readMetadata.getExtraMetadataFormatNames() ${readMetadata.getExtraMetadataFormatNames()}")
+//                ec.logger.warn("readMetadata.getMetadataFormat(readMetadata.getMetadataFormatNames()[0]).getRootName() ${readMetadata.getMetadataFormat(readMetadata.getMetadataFormatNames()[0]).getRootName()}")
+
+                ImageWriter transcoder = null
+
+                if (!transcoders.hasNext()) {
+//                    throw new IllegalArgumentException("No transcoder for reader: " + reader.formatName + " with writer: " + outputImageFormat);
+                } else {
+                    transcoder = transcoders.next();
+                }
+
+
+                try {
+                    // Create output stream (in try-with-resource block to avoid leaks)
+                    try (ImageOutputStream output = ImageIO.createImageOutputStream(outputImageStream)) {
+                        writer.setOutput(output);
+
+                        // Optionally, listen to progress, warnings, etc.
+
+                        ImageWriteParam param = writer.getDefaultWriteParam();
+
+                        // Optionally, control format specific settings of param
+                        // control generic write settings like sub sampling, source region, output type etc.
+
+                        // Optionally, provide thumbnails and
+//                        writer.write(readMetadata, new IIOImage(image, null, null), param);
+                        writer.write(image);
+
+                        try {
+                            outputResourceReference.putBytes(outputImageStream.toByteArray())
+                        }
+                        finally {
+                            outputImageStream.close()
+                        }
+                    }
+                }
+                finally {
+                    // Dispose writer in finally block to avoid memory leaks
+                    writer.dispose();
+                    image = null
+                }
+
+                // If can't write image it's probably a png converting to jpg and extra steps need to happen
+//                if (!ImageIO.write(image, outputImageFormat, outputImageStream)) {
 //                    BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB)
 //                    result.createGraphics().drawImage(image, 0, 0, Color.WHITE, null)
-//
-//                    ImageIO.write(result, outputImageFormat, outputFile)
-//                } finally {
-//
+//                    ImageIO.write(result, outputImageFormat, outputImageStream)
+//                    // removed referenced result so garbage collector can pick it up while we're saving the byte array
+//                    result = null
+////                    throw "cannot write image"
 //                }
-
-//                ImageIO.write(result, outputImageFormat, outputResourceReference.getOutputStream())
-
-                OutputStream outputImageStream = new ByteArrayOutputStream();
-                BufferedImage image = ImageIO.read(inputImageStream)
-                // If can't write image it's probably a png converting to jpg and extra steps need to happen
-                if (!ImageIO.write(image, outputImageFormat, outputImageStream)) {
-                    BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB)
-                    result.createGraphics().drawImage(image, 0, 0, Color.WHITE, null)
-                    ImageIO.write(result, outputImageFormat, outputImageStream)
-                    result = null
-                }
                 // removed referenced result so garbage collector can pick it up while we're saving the byte array
-                image = null
-                try { outputResourceReference.putBytes(outputImageStream.toByteArray()) }
-                finally { outputImageStream.close() }
-
-//                try {
-//                    outputImageStream = Files.newInputStream(outputFile.toPath())
-//                    if (outputImageStream == null) ec.logger.warn("outputImageStream == ${outputImageStream}")
-//                    outputResourceReference.putStream(outputImageStream)
-//                } finally {
-//                    // outputImageStream?.flush()
-//                    outputImageStream?.close()
-//                }
-
-//                } catch (Exception exp) {
-//                    exp.printStackTrace()
-//                }
                 ]]></script>
-            <log level="warn" message="outputImageFormat ${outputImageFormat}"/>
-<!--            <log level="warn" message="outputFile?.length() ${outputFile?.length()}"/>-->
-<!--            <log level="warn" message="outputFile?.getPath() ${outputFile?.getPath()}"/>-->
-<!--            <log level="warn" message="Files.probeContentType(outputFile?.toPath()) ${Files.probeContentType(outputFile?.toPath())}"/>-->
-
-            <log level="warn" message="outputResourceReference?.getSize() ${outputResourceReference?.getSize()}"/>
-            <log level="warn" message="outputResourceReference?.getParent() ${outputResourceReference?.getParent()}"/>
-            <log level="warn" message="outputResourceReference?.getFileName() ${outputResourceReference?.getFileName()}"/>
-            <log level="warn" message="outputResourceReference?.getContentType() ${outputResourceReference?.getContentType()}"/>
+<!--            <log level="warn" message="outputImageFormat ${outputImageFormat}"/>-->
+<!--            <log level="warn" message="outputResourceReference?.getSize() ${outputResourceReference?.getSize()}"/>-->
+<!--            <log level="warn" message="outputResourceReference?.getParent() ${outputResourceReference?.getParent()}"/>-->
+<!--            <log level="warn" message="outputResourceReference?.getFileName() ${outputResourceReference?.getFileName()}"/>-->
+<!--            <log level="warn" message="outputResourceReference?.getContentType() ${outputResourceReference?.getContentType()}"/>-->
         </actions>
     </service>
 </services>
