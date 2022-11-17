@@ -13,14 +13,21 @@ along with this software (see the LICENSE.md file). If not, see
 <http://creativecommons.org/publicdomain/zero/1.0/>.
 -->
 <services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
-
     <service verb="convert" noun="Image">
         <description>Convert an image from one type to another. See for reference: https://www.baeldung.com/java-copy-file</description>
         <in-parameters>
             <parameter name="inputImageStream" type="java.io.InputStream" required="true"/>
-            <parameter name="outputResourceReference" type="org.moqui.resource.ResourceReference" required="true"/>
+            <parameter name="inputImageMimeType" required="true"/>
             <parameter name="outputImageFormat" required="true"><description>Supports the values: jpg, png, tiff, webp, bmp, wbmp</description></parameter>
-            <parameter name="outputImagePixelWidth" type="Integer"><description>Defaults to inputImageStream's pixel width. Aspect ratio is kept by default but ignores exif metadata rotations.</description></parameter>
+            <parameter name="outputResourceReferenceOriginal" type="org.moqui.resource.ResourceReference"><description>Destination to save original image with no modification.</description></parameter>
+            <parameter name="outputResourceReferenceLarge" type="org.moqui.resource.ResourceReference"><description>Destination to save the converted image with pixelWidthLarge width.</description></parameter>
+            <parameter name="outputResourceReferenceMedium" type="org.moqui.resource.ResourceReference"><description>Destination to save the converted image with pixelWidthMedium width.</description></parameter>
+            <parameter name="outputResourceReferenceSmall" type="org.moqui.resource.ResourceReference"><description>Destination to save the converted image with pixelWidthSmall width.</description></parameter>
+            <parameter name="outputResourceReferenceThumbnail" type="org.moqui.resource.ResourceReference"><description>Destination to save the converted image with pixelWidthThumbnail width.</description></parameter>
+            <parameter name="pixelWidthLarge" type="Integer" default="2160" required="true"/>
+            <parameter name="pixelWidthMedium" type="Integer" default="1080" required="true"/>
+            <parameter name="pixelWidthSmall" type="Integer" default="360" required="true"/>
+            <parameter name="pixelWidthThumbnail" type="Integer" default="165" required="true"/>
         </in-parameters>
         <out-parameters>
         </out-parameters>
@@ -31,46 +38,199 @@ along with this software (see the LICENSE.md file). If not, see
                 import java.awt.Color
                 import java.awt.image.BufferedImage
                 import java.awt.image.BufferedImageOp
+                import java.awt.image.ColorModel
+                import java.awt.image.ComponentColorModel
+                import java.awt.color.ColorSpace
+                import java.awt.Transparency
+                import java.awt.image.DataBuffer
                 import com.twelvemonkeys.image.ResampleOp
                 import javax.imageio.stream.ImageInputStream
                 import javax.imageio.stream.ImageOutputStream
 
-                // Thanks to https://stackoverflow.com/questions/2290336/converting-png-into-jpeg for the great example maybe also see: https://stackoverflow.com/questions/464825/converting-transparent-gif-png-to-jpeg-using-java
-                OutputStream outputImageStream = new ByteArrayOutputStream()
-                BufferedImage image = ImageIO.read(inputImageStream)
-//                BufferedImage image = null
+                import org.moqui.entity.EntityList
+                import org.moqui.entity.EntityValue
+                import org.moqui.impl.context.ExecutionContextImpl
 
-//                ec.logger.warn("image type ${image.getType()}")
-//                ec.logger.info("Resampling image from ${image.getWidth()} to ${outputImagePixelWidth} pixels wide and ${image.getHeight()} to ${outputImagePixelWidth * image.getHeight() / image.getWidth()} with an aspect ratio of ${image.getWidth()/image.getHeight()}")
-
-                if (outputImagePixelWidth && outputImagePixelWidth < image.getWidth()) {
-                    // aspect ratio = pixel width / pixel height so new pixel height = new pixel width / aspect ratio if aspect ratio is pixel width / pixel height then new pixel height = new pixel width * (pixel height / pixel width)
-                    ec.logger.info("Resampling image from ${image.getWidth()} to ${outputImagePixelWidth} pixels wide and ${image.getHeight()} to ${outputImagePixelWidth * image.getHeight() / image.getWidth()} with an aspect ratio of ${image.getWidth()/image.getHeight()}")
-                    BufferedImageOp resampler = new ResampleOp(outputImagePixelWidth, (outputImagePixelWidth * image.getHeight() / image.getWidth()).intValue(), ResampleOp.FILTER_LANCZOS); // A good default filter, see class documentation for more info
-                    image = resampler.filter(image, null);
+                if (outputResourceReferenceOriginal != null) {
+                    // Save Image
+                    outputResourceReferenceOriginal.putStream(inputImageStream)
                 }
 
-                // If can't write image it's probably a png converting to jpg and extra steps need to happen
-                if (!ImageIO.write(image, outputImageFormat, outputImageStream)) {
-                    BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB)
-                    result.createGraphics().drawImage(image, 0, 0, Color.WHITE, null)
-                    if (!ImageIO.write(result, outputImageFormat, outputImageStream)) {
-                        throw "cannot write image"
+                if (inputImageStream == null) ec.logger.error("inputImageStream is null")
+                else ec.logger.warn("inputImageStream is not null")
+
+                IIOImage image = null
+                if (outputResourceReferenceLarge != null || outputResourceReferenceMedium != null || outputResourceReferenceSmall != null || outputResourceReferenceThumbnail != null) {
+                    // Thanks to https://stackoverflow.com/questions/2290336/converting-png-into-jpeg for the great example maybe also see: https://stackoverflow.com/questions/464825/converting-transparent-gif-png-to-jpeg-using-java
+                    // Read Image
+                    // Create input stream (in try-with-resource block to avoid leaks)
+                    try (ImageInputStream input = ImageIO.createImageInputStream(inputImageStream)) {
+                        if (input == null) ec.logger.error("input is null")
+                        else ec.logger.warn("input is not null")
+
+                        // Get the reader
+                        Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+                        if (!readers.hasNext()) {
+                            throw new IllegalArgumentException("No reader for: " + inputImageStream);
+                        }
+                        ImageReader reader = readers.next();
+                        try {
+                            reader.setInput(input, true, false);
+                            // Optionally, listen for read warnings, progress, etc.
+                            ImageReadParam param = reader.getDefaultReadParam();
+                            // Optionally, control read settings like sub sampling, source region or destination etc.
+//                        param.setSourceSubsampling(...);
+//                        param.setSourceRegion(...);
+//                        param.setDestination(...);
+                            // Finally read the image, using settings from param
+                            image = reader.readAll(0, param);
+                            // Optionally, read thumbnails, meta data, etc...
+                        }
+                        finally {
+                            // Dispose reader in finally block to avoid memory leaks
+                            reader.dispose();
+                            reader = null
+                            // Close input stream
+                            inputImageStream.close();
+                            inputImageStream = null
+                        }
                     }
-                    // removed referenced result so garbage collector can pick it up while we're saving the byte array
-                    result = null
                 }
-                // removed referenced result so garbage collector can pick it up while we're saving the byte array
-                image = null
 
-                try { outputResourceReference.putBytes(outputImageStream.toByteArray()) }
-                finally { outputImageStream.close() }
+                if (image == null) ec.logger.error("Image is null")
+
+                if (outputResourceReferenceLarge != null) {
+//                        ec.logger.info("Resampling image from ${image.getRenderedImage().getWidth()} to ${pixelWidthLarge} pixels wide and ${image.getRenderedImage().getHeight()} to ${pixelWidthLarge * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()} with an aspect ratio of ${image.getRenderedImage().getWidth()/image.getRenderedImage().getHeight()}")
+                    ec.logger.warn("saving outputResourceReferenceLarge to ${outputResourceReferenceLarge.getLocation()}")
+                    // aspect ratio = pixel width / pixel height so new pixel height = new pixel width / aspect ratio if aspect ratio is pixel width / pixel height then new pixel height = new pixel width * (pixel height / pixel width)
+                    BufferedImageOp resampler = new ResampleOp(pixelWidthLarge, (pixelWidthLarge * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
+                    // A good default filter, see class documentation for more info
+                    ec.service.async().name("org.moqui.impl.write#Image").parameters([image: resampler.filter(image, null), outputResourceReference: outputResourceReferenceLarge, outputImageFormat: outputImageFormat]).call()
+                }
+
+                if (outputResourceReferenceMedium != null) {
+                    ec.logger.warn("saving outputResourceReferenceMedium to ${outputResourceReferenceMedium.getLocation()}")
+                    BufferedImageOp resampler = new ResampleOp(pixelWidthMedium, (pixelWidthMedium * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
+                    // A good default filter, see class documentation for more info
+                    ec.service.async().name("org.moqui.impl.write#Image").parameters([image: resampler.filter(image, null), outputResourceReference: outputResourceReferenceMedium, outputImageFormat: outputImageFormat]).call()
+                }
+
+                if (outputResourceReferenceSmall != null) {
+                    ec.logger.warn("saving outputResourceReferenceSmall to ${outputResourceReferenceSmall.getLocation()}")
+                    BufferedImageOp resampler = new ResampleOp(pixelWidthSmall, (pixelWidthSmall * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
+                    // A good default filter, see class documentation for more info
+                    ec.service.async().name("org.moqui.impl.write#Image").parameters([image: resampler.filter(image, null), outputResourceReference: outputResourceReferenceSmall, outputImageFormat: outputImageFormat]).call()
+                }
+
+                if (outputResourceReferenceThumbnail != null) {
+                    ec.logger.warn("saving outputResourceReferenceThumbnail to ${outputResourceReferenceThumbnail.getLocation()}")
+                    BufferedImageOp resampler = new ResampleOp(pixelWidthThumbnail, (pixelWidthThumbnail * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
+                    // A good default filter, see class documentation for more info
+                    ec.service.async().name("org.moqui.impl.write#Image").parameters([image: resampler.filter(image, null), outputResourceReference: outputResourceReferenceThumbnail, outputImageFormat: outputImageFormat]).call()
+                }
+
+//                } catch (Throwable t ) {
+//                    logger.error("Error in convertImage", t)
+//                    ec.message.addMessage("Error converting image: ${t.toString()}")
+//                    // don't rethrow: throw new BaseArtifactException("Error in convertImage", t)
+//                }
                 ]]></script>
-<!--            <log level="warn" message="outputImageFormat ${outputImageFormat}"/>-->
-<!--            <log level="warn" message="outputResourceReference?.getSize() ${outputResourceReference?.getSize()}"/>-->
-<!--            <log level="warn" message="outputResourceReference?.getParent() ${outputResourceReference?.getParent()}"/>-->
-<!--            <log level="warn" message="outputResourceReference?.getFileName() ${outputResourceReference?.getFileName()}"/>-->
-<!--            <log level="warn" message="outputResourceReference?.getContentType() ${outputResourceReference?.getContentType()}"/>-->
+        </actions>
+    </service>
+
+    <service verb="write" noun="Image">
+        <in-parameters>
+            <parameter name="image" type="javax.imageio.IIOImage" required="true"/>
+            <parameter name="outputResourceReference" type="org.moqui.resource.ResourceReference" required="true"/>
+            <parameter name="outputImageFormat" required="true"><description>Supports the values: jpg, png, tiff, webp, bmp, wbmp</description></parameter>
+        </in-parameters>
+        <out-parameters>
+
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import javax.imageio.*
+                import javax.imageio.metadata.IIOMetadata
+                import java.awt.Color
+                import java.awt.image.BufferedImage
+                import java.awt.image.BufferedImageOp
+                import java.awt.image.ColorModel
+                import java.awt.image.ComponentColorModel
+                import java.awt.color.ColorSpace
+                import java.awt.Transparency
+                import java.awt.image.DataBuffer
+                import com.twelvemonkeys.image.ResampleOp
+                import javax.imageio.stream.ImageInputStream
+                import javax.imageio.stream.ImageOutputStream
+
+                import org.moqui.entity.EntityList
+                import org.moqui.entity.EntityValue
+                import org.moqui.impl.context.ExecutionContextImpl
+
+                // Get the writer
+                Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName(outputImageFormat);
+                if (!writers.hasNext()) {
+                    throw new IllegalArgumentException("No writer for: " + outputImageFormat);
+                }
+                ImageWriter writer = writers.next()
+
+                // Write Image
+                    try (OutputStream outputImageStream = new ByteArrayOutputStream()) {
+                        // Create output stream (in try-with-resource block to avoid leaks)
+                        try (ImageOutputStream output = ImageIO.createImageOutputStream(outputImageStream)) {
+                            writer.setOutput(output);
+                            // Optionally, listen to progress, warnings, etc.
+                            ImageWriteParam param = writer.getDefaultWriteParam();
+                            // Optionally, control format specific settings of param
+                            // control generic write settings like sub sampling, source region, output type etc.
+
+                            // Transcode Metadata
+//                            ec.logger.warn("before image.getMetadata() ${image.getMetadata()}")
+//                            Iterator<ImageTranscoder> transcoders = ImageIO.getImageTranscoders(reader, writer)
+//                            ImageWriter transcoder = null
+//                            if (!transcoders.hasNext()) {
+////                                throw new IllegalArgumentException("No transcoder for reader: " + reader.formatName + " with writer: " + outputImageFormat);
+//                            } else {
+//                                transcoder = transcoders.next();
+//
+//                                image.setMetadata(transcoder.convertStreamMetadata(image.getMetadata(), param))
+//                            }
+//                            ec.logger.warn("after image.getMetadata() ${image.getMetadata()}")
+
+                            try { writer.write(image, param) }
+                            catch (javax.imageio.IIOException e) {
+                                // If can't write image it's probably a png converting to jpg and extra steps need to happen
+                                try {
+                                    BufferedImage result = new BufferedImage(image.getRenderedImage().getWidth(), image.getRenderedImage().getHeight(), BufferedImage.TYPE_INT_RGB)
+//                                    ec.logger.warn("((BufferedImage) image.getRenderedImage()).getType() ${((BufferedImage) image.getRenderedImage()).getType()}")
+//                                    BufferedImage result = new BufferedImage(image.getRenderedImage().getWidth(), image.getRenderedImage().getHeight(), ((BufferedImage) image.getRenderedImage()).getType())
+                                    result.createGraphics().drawImage(image.getRenderedImage(), 0, 0, Color.WHITE, null)
+                                    image.setRenderedImage(result)
+                                } finally {
+                                    result = null
+                                }
+                                // If can't write image panic
+                                try { writer.write(image, param) }
+                                catch (Exception f) { throw f }
+                            }
+
+                            // Save Image
+                            outputResourceReference.putBytes(outputImageStream.toByteArray())
+                        }
+                    }
+                    finally {
+                        // Dispose writer in finally block to avoid memory leaks
+                        writer.dispose();
+                        writer = null
+                        // removed referenced result so garbage collector can pick it up while we're saving the byte array
+                        image = null
+                        // removed referenced result so garbage collector can pick it up while we're saving the byte array
+                        outputImageStream.close()
+                    }
+
+
+
+                ]]></script>
         </actions>
     </service>
 </services>
