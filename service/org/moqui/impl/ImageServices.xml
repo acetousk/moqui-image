@@ -29,6 +29,11 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="pixelWidthThumbnail" type="Integer" default="165" required="true"/>
         </in-parameters>
         <out-parameters>
+            <parameter name="contentLocationOriginal" default="null"><description>Destination string that was saved with the original image with no modification.</description></parameter>
+            <parameter name="contentLocationLarge" default="null"><description>Destination string that was saved with the converted image with pixelWidthLarge width.</description></parameter>
+            <parameter name="contentLocationMedium" default="null"><description>Destination string that was saved with the converted image with pixelWidthMedium width.</description></parameter>
+            <parameter name="contentLocationSmall" default="null"><description>Destination string that was saved with the converted image with pixelWidthSmall width.</description></parameter>
+            <parameter name="contentLocationThumbnail" default="null"><description>Destination string that was saved with the converted image with pixelWidthThumbnail width.</description></parameter>
         </out-parameters>
         <actions>
             <script><![CDATA[
@@ -52,8 +57,8 @@ along with this software (see the LICENSE.md file). If not, see
                 import org.moqui.entity.EntityValue
                 import org.moqui.impl.context.ExecutionContextImpl
 
-                if (inputImageStream == null) ec.logger.error("inputImageStream is null")
-                else ec.logger.warn("inputImageStream is not null")
+//                if (inputImageStream == null) ec.logger.error("inputImageStream is null")
+//                else ec.logger.warn("inputImageStream is not null")
 
                 IIOImage image = null
                 String inputImageFormat = null
@@ -96,44 +101,40 @@ along with this software (see the LICENSE.md file). If not, see
                     }
                 }
 
-                if (image == null) ec.logger.warn("Image is null")
+//                if (image == null) ec.logger.warn("Image is null")
 
                 if (outputResourceReferenceOriginal != null) {
                     ec.logger.warn("saving outputResourceReferenceOriginal to ${outputResourceReferenceOriginal.getLocation()}")
-                    // A good default filter, see class documentation for more info
-                    ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference: outputResourceReferenceOriginal, outputImageFormat: inputImageFormat]).call()
+                    contentLocationOriginal = ec.service.sync().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference: outputResourceReferenceOriginal, outputImageFormat: ImageIO.getWriterFileSuffixes().contains(inputImageFormat) ? inputImageFormat : outputImageFormat, inputImageFormat:inputImageFormat]).call()?.contentLocation
                 }
 
                 if (outputResourceReferenceLarge != null) {
                     ec.logger.warn("saving outputResourceReferenceLarge to ${outputResourceReferenceLarge.getLocation()}")
                     // aspect ratio = pixel width / pixel height so new pixel height = new pixel width / aspect ratio if aspect ratio is pixel width / pixel height then new pixel height = new pixel width * (pixel height / pixel width)
                     BufferedImageOp resampler = new ResampleOp(pixelWidthLarge, (pixelWidthLarge * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
-                    // A good default filter, see class documentation for more info
                     image.setRenderedImage(resampler.filter(image.getRenderedImage(), null))
-                    ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceLarge, outputImageFormat: outputImageFormat]).call()
+                    contentLocationLarge = ec.service.sync().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceLarge, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).call()?.contentLocation
                 }
 
                 if (outputResourceReferenceMedium != null) {
                     ec.logger.warn("saving outputResourceReferenceMedium to ${outputResourceReferenceMedium.getLocation()}")
                     BufferedImageOp resampler = new ResampleOp(pixelWidthMedium, (pixelWidthMedium * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
-                    // A good default filter, see class documentation for more info
                     image.setRenderedImage(resampler.filter(image.getRenderedImage(), null))
-                    ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceMedium, outputImageFormat: outputImageFormat]).call()
+                    contentLocationMedium = ec.service.sync().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceMedium, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).call()?.contentLocation
                 }
 
                 if (outputResourceReferenceSmall != null) {
                     ec.logger.warn("saving outputResourceReferenceSmall to ${outputResourceReferenceSmall.getLocation()}")
                     BufferedImageOp resampler = new ResampleOp(pixelWidthSmall, (pixelWidthSmall * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
-                    // A good default filter, see class documentation for more info
                     image.setRenderedImage(resampler.filter(image.getRenderedImage(), null))
-                    ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceSmall, outputImageFormat: outputImageFormat]).call()
+                    contentLocationSmall = ec.service.sync().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceSmall, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).call()?.contentLocation
                 }
 
                 if (outputResourceReferenceThumbnail != null) {
                     ec.logger.warn("saving outputResourceReferenceThumbnail to ${outputResourceReferenceThumbnail.getLocation()}")
                     BufferedImageOp resampler = new ResampleOp(pixelWidthThumbnail, (pixelWidthThumbnail * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
                     image.setRenderedImage(resampler.filter(image.getRenderedImage(), null))
-                    ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceThumbnail, outputImageFormat: outputImageFormat]).call()
+                    contentLocationThumbnail = ec.service.sync().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceThumbnail, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).call()?.contentLocation
                 }
 
 //                } catch (Throwable t ) {
@@ -142,6 +143,8 @@ along with this software (see the LICENSE.md file). If not, see
 //                    // don't rethrow: throw new BaseArtifactException("Error in convertImage", t)
 //                }
                 ]]></script>
+
+<!--            <log level="warn" message="convert context.toString() ${context.toString()}"/>-->
         </actions>
     </service>
 
@@ -150,11 +153,15 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="image" type="javax.imageio.IIOImage" required="true"/>
             <parameter name="outputResourceReference" type="org.moqui.resource.ResourceReference" required="true"/>
             <parameter name="outputImageFormat" required="true"><description>Supports the values: jpg, png, tiff, webp, bmp, wbmp</description></parameter>
+            <parameter name="inputImageFormat" required="true"/>
+            <parameter name="retryIfFail" required="true" default="true"/>
         </in-parameters>
         <out-parameters>
-
+            <parameter name="contentLocation" default="null"/>
+            <parameter name="succeeded" default="false"/>
         </out-parameters>
         <actions>
+<!--            <log level="warn" message="start write context.toString() ${context.toString()}"/>-->
             <script><![CDATA[
                 import javax.imageio.*
                 import javax.imageio.metadata.IIOMetadata
@@ -205,8 +212,28 @@ along with this software (see the LICENSE.md file). If not, see
 //                            ec.logger.warn("after image.getMetadata() ${image.getMetadata()}")
 
                             try { writer.write(image) }
+//                                    if (!retryIfFail) {
                             catch (javax.imageio.IIOException e) {
                                 // If can't write image it's probably a png converting to jpg and extra steps need to happen
+//                                ec.logger.warn("ImageIO.getWriterFileSuffixes() ${ImageIO.getWriterFileSuffixes()}")
+//                                ec.logger.warn("ImageIO.getWriterFileSuffixes().contains(inputImageFormat) ${ImageIO.getWriterFileSuffixes().contains(inputImageFormat)}")
+                                if (retryIfFail) {
+                                    newOutputResourceReference = outputResourceReference.createNew(outputResourceReference.getLocation().take(outputResourceReference.getLocation().lastIndexOf('.')) + '.' + inputImageFormat)
+                                    ec.logger.warn("Retrying to write image from format ${outputImageFormat} to ${inputImageFormat} with a destination to ${newOutputResourceReference.getLocation()} instead of ${outputResourceReference.getLocation()}")
+                                    imageOutput = ec.service.sync().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference:newOutputResourceReference, outputImageFormat:inputImageFormat, inputImageFormat:inputImageFormat, retryIfFail:false]).call()
+
+                                    if (imageOutput.succeeded) {
+                                        ec.logger.warn("Succeeded to write image from format ${outputImageFormat} to ${inputImageFormat} with a destination to ${newOutputResourceReference.getLocation()} instead of ${outputResourceReference.getLocation()}")
+                                        succeeded = true
+                                        contentLocation = imageOutput.contentLocation
+                                        return
+                                    } else {
+                                        ec.logger.warn("Failed to write image from format ${outputImageFormat} to ${inputImageFormat} with a destination to ${newOutputResourceReference.getLocation()} instead of ${outputResourceReference.getLocation()}")
+                                    }
+                                } else {
+                                    ec.logger.warn("Not retrying to write image from format ${outputImageFormat} to ${inputImageFormat} with a destination to ${outputResourceReference.getLocation()}")
+                                }
+
                                 try {
                                     BufferedImage result = new BufferedImage(image.getRenderedImage().getWidth(), image.getRenderedImage().getHeight(), BufferedImage.TYPE_INT_RGB)
 //                                    ec.logger.warn("((BufferedImage) image.getRenderedImage()).getType() ${((BufferedImage) image.getRenderedImage()).getType()}")
@@ -217,8 +244,11 @@ along with this software (see the LICENSE.md file). If not, see
                                     result = null
                                 }
                                 // If can't write image panic
-                                try { writer.write(image, param) }
-                                catch (Exception f) { throw f }
+                                try { writer.write(image) }
+                                catch (Exception f) {
+                                    ec.logger.error("Can't write image because ${f.toString()}")
+                                    throw f
+                                }
                             }
 
                             // Save Image
@@ -233,9 +263,54 @@ along with this software (see the LICENSE.md file). If not, see
                         image = null
                     }
 
-
-
                 ]]></script>
+            <set field="succeeded" from="true"/>
+            <set field="contentLocation" from="contentLocation ?: outputResourceReference.getLocation()"/>
+<!--            <log level="warn" message="end write context.toString() ${context.toString()}"/>-->
+        </actions>
+    </service>
+
+    <service verb="get" noun="ImageReaderFileSuffixes">
+        <in-parameters></in-parameters>
+        <out-parameters>
+            <parameter name="imageReaderFileSuffixes" default="[]"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[import javax.imageio.ImageIO]]></script>
+            <set field="imageReaderFileSuffixes" from="ImageIO.getReaderFileSuffixes()"/>
+            <log level="warn" message="imageReaderFileSuffixes ${imageReaderFileSuffixes}"/>
+        </actions>
+    </service>
+    <service verb="get" noun="ImageWriterFileSuffixes">
+        <in-parameters></in-parameters>
+        <out-parameters>
+            <parameter name="imageWriterFileSuffixes" default="[]"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[import javax.imageio.ImageIO]]></script>
+            <set field="imageWriterFileSuffixes" from="ImageIO.getWriterFileSuffixes()"/>
+        </actions>
+    </service>
+
+    <service verb="get" noun="ImageReaderMIMETypes">
+        <in-parameters></in-parameters>
+        <out-parameters>
+            <parameter name="imageReaderMIMETypes" default="[]"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[import javax.imageio.ImageIO]]></script>
+            <set field="imageReaderMIMETypes" from="ImageIO.getReaderMIMETypes()"/>
+            <log level="warn" message="imageReaderMIMETypes ${imageReaderMIMETypes}"/>
+        </actions>
+    </service>
+    <service verb="get" noun="ImageWriterMIMETypes">
+        <in-parameters></in-parameters>
+        <out-parameters>
+            <parameter name="imageWriterMIMETypes" default="[]"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[import javax.imageio.ImageIO]]></script>
+            <set field="imageWriterMIMETypes" from="ImageIO.getWriterMIMETypes()"/>
         </actions>
     </service>
 </services>
