@@ -154,7 +154,7 @@ along with this software (see the LICENSE.md file). If not, see
             <parameter name="outputResourceReference" type="org.moqui.resource.ResourceReference" required="true"/>
             <parameter name="outputImageFormat" required="true"><description>Supports the values: jpg, png, tiff, webp, bmp, wbmp</description></parameter>
             <parameter name="inputImageFormat" required="true"/>
-            <parameter name="retryIfFail" required="true" default="true"/>
+            <parameter name="retryIfFail" default="true"/>
         </in-parameters>
         <out-parameters>
             <parameter name="contentLocation" default="null"/>
@@ -215,10 +215,11 @@ along with this software (see the LICENSE.md file). If not, see
 //                                    if (!retryIfFail) {
                             catch (javax.imageio.IIOException e) {
                                 // If can't write image it's probably a png converting to jpg and extra steps need to happen
+                                // see also: https://stackoverflow.com/questions/3432388/imageio-not-able-to-write-a-jpeg-file
 //                                ec.logger.warn("ImageIO.getWriterFileSuffixes() ${ImageIO.getWriterFileSuffixes()}")
 //                                ec.logger.warn("ImageIO.getWriterFileSuffixes().contains(inputImageFormat) ${ImageIO.getWriterFileSuffixes().contains(inputImageFormat)}")
-                                if (retryIfFail) {
-                                    newOutputResourceReference = outputResourceReference.createNew(outputResourceReference.getLocation().take(outputResourceReference.getLocation().lastIndexOf('.')) + '.' + inputImageFormat)
+                                newOutputResourceReference = outputResourceReference.createNew(outputResourceReference.getLocation().take(outputResourceReference.getLocation().lastIndexOf('.')) + '.' + inputImageFormat)
+                                if (retryIfFail && newOutputResourceReference.getLocation() != outputResourceReference.getLocation()) {
                                     ec.logger.warn("Retrying to write image from format ${outputImageFormat} to ${inputImageFormat} with a destination to ${newOutputResourceReference.getLocation()} instead of ${outputResourceReference.getLocation()}")
                                     imageOutput = ec.service.sync().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference:newOutputResourceReference, outputImageFormat:inputImageFormat, inputImageFormat:inputImageFormat, retryIfFail:false]).call()
 
@@ -233,6 +234,7 @@ along with this software (see the LICENSE.md file). If not, see
                                 } else {
                                     ec.logger.warn("Not retrying to write image from format ${outputImageFormat} to ${inputImageFormat} with a destination to ${outputResourceReference.getLocation()}")
                                 }
+                                newOutputResourceReference = null
 
                                 try {
                                     BufferedImage result = new BufferedImage(image.getRenderedImage().getWidth(), image.getRenderedImage().getHeight(), BufferedImage.TYPE_INT_RGB)
@@ -300,7 +302,7 @@ along with this software (see the LICENSE.md file). If not, see
         <actions>
             <script><![CDATA[import javax.imageio.ImageIO]]></script>
             <set field="imageReaderMIMETypes" from="ImageIO.getReaderMIMETypes()"/>
-            <log level="warn" message="imageReaderMIMETypes ${imageReaderMIMETypes}"/>
+<!--            <log level="warn" message="imageReaderMIMETypes ${imageReaderMIMETypes}"/>-->
         </actions>
     </service>
     <service verb="get" noun="ImageWriterMIMETypes">
