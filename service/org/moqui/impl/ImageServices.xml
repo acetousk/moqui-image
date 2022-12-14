@@ -68,8 +68,8 @@ along with this software (see the LICENSE.md file). If not, see
                     // Create input stream (in try-with-resource block to avoid leaks)
                     try (ImageInputStream input = ImageIO.createImageInputStream(inputImageStream)) {
 
-                        if (input == null) ec.logger.error("input is null")
-                        else ec.logger.warn("input is not null")
+//                        if (input == null) ec.logger.error("input is null")
+//                        else ec.logger.warn("input is not null")
 
                         // Get the reader
                         Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
@@ -280,7 +280,7 @@ along with this software (see the LICENSE.md file). If not, see
         <actions>
             <script><![CDATA[import javax.imageio.ImageIO]]></script>
             <set field="imageReaderFileSuffixes" from="ImageIO.getReaderFileSuffixes()"/>
-            <log level="warn" message="imageReaderFileSuffixes ${imageReaderFileSuffixes}"/>
+<!--            <log level="warn" message="imageReaderFileSuffixes ${imageReaderFileSuffixes}"/>-->
         </actions>
     </service>
     <service verb="get" noun="ImageWriterFileSuffixes">
