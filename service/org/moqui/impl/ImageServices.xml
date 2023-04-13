@@ -136,31 +136,11 @@ along with this software (see the LICENSE.md file). If not, see
                     futureContentLocationThumbnail = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference: outputResourceReferenceThumbnail, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).callFuture();
                 }
 
-                while(
-                        (futureContentLocationOriginal != null && !futureContentLocationOriginal.isDone()) ||
-                        (futureContentLocationLarge != null && !futureContentLocationLarge.isDone()) ||
-                        (futureContentLocationMedium != null && !futureContentLocationMedium.isDone()) ||
-                        (futureContentLocationSmall != null && !futureContentLocationSmall.isDone()) ||
-                        (futureContentLocationThumbnail != null && !futureContentLocationThumbnail.isDone())
-                ) {
-                    ec.logger.warn("futureContentLocationOriginal.isDone() ${futureContentLocationOriginal?.isDone()}\n" +
-                            "futureContentLocationLarge.isDone() ${futureContentLocationLarge?.isDone()}\n" +
-                            "futureContentLocationMedium.isDone() ${futureContentLocationMedium?.isDone()}\n" +
-                            "futureContentLocationSmall.isDone() ${futureContentLocationSmall?.isDone()}\n" +
-                            "futureContentLocationThumbnail.isDone() ${futureContentLocationThumbnail?.isDone()}");
-                    Thread.sleep(500);
-                }
-
                 contentLocationOriginal = futureContentLocationOriginal?.get()?.contentLocation;
-                ec.logger.warn("contentLocationOriginal: ${contentLocationOriginal}")
                 contentLocationLarge = futureContentLocationLarge?.get()?.contentLocation;
-                ec.logger.warn("contentLocationLarge: ${contentLocationLarge}")
                 contentLocationMedium = futureContentLocationMedium?.get()?.contentLocation;
-                ec.logger.warn("contentLocationMedium: ${contentLocationMedium}")
                 contentLocationSmall = futureContentLocationSmall?.get()?.contentLocation;
-                ec.logger.warn("contentLocationSmall: ${contentLocationSmall}")
                 contentLocationThumbnail = futureContentLocationThumbnail?.get()?.contentLocation;
-                ec.logger.warn("contentLocationThumbnail: ${contentLocationThumbnail}")
 
 //                } catch (Throwable t ) {
 //                    logger.error("Error in convertImage", t)
