@@ -58,6 +58,9 @@ along with this software (see the LICENSE.md file). If not, see
                 import org.moqui.entity.EntityValue
                 import org.moqui.impl.context.ExecutionContextImpl
 
+                startTimestamp = ec.user.getNowTimestamp()
+//                ec.logger.info("Starting ImageServices.convert " + startTimestamp)
+
                 IIOImage image = null
                 String inputImageFormat = null
                 if (outputResourceReferenceOriginal != null || outputResourceReferenceLarge != null || outputResourceReferenceMedium != null || outputResourceReferenceSmall != null || outputResourceReferenceThumbnail != null) {
@@ -96,7 +99,6 @@ along with this software (see the LICENSE.md file). If not, see
                     }
                 }
 
-
                 Future<Map<String, Object>> futureContentLocationOriginal = null
                 Future<Map<String, Object>> futureContentLocationLarge = null
                 Future<Map<String, Object>> futureContentLocationMedium = null
@@ -104,36 +106,45 @@ along with this software (see the LICENSE.md file). If not, see
                 Future<Map<String, Object>> futureContentLocationThumbnail = null
                 if (outputResourceReferenceOriginal != null) {
                     ec.logger.warn("saving outputResourceReferenceOriginal to ${outputResourceReferenceOriginal.getLocation()}")
-                    futureContentLocationOriginal = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference: outputResourceReferenceOriginal, outputImageFormat: ImageIO.getWriterFileSuffixes().contains(inputImageFormat) ? inputImageFormat : outputImageFormat, inputImageFormat:inputImageFormat]).callFuture();
+                    futureContentLocationOriginal = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceOriginal, outputImageFormat: ImageIO.getWriterFileSuffixes().contains(inputImageFormat) ? inputImageFormat : outputImageFormat, inputImageFormat: inputImageFormat]).callFuture();
                 }
+
+                Integer maxOutputWidth = outputResourceReferenceLarge != null ? pixelWidthLarge : outputResourceReferenceMedium != null ? pixelWidthMedium : outputResourceReferenceSmall != null ? pixelWidthSmall : outputResourceReferenceThumbnail != null ? pixelWidthThumbnail : null
+
+                // This might make it go faster, but basic testing goes slower https://github.com/haraldk/TwelveMonkeys/blob/3e4460ac41ee0be5679aa66405d7d24b4da742c4/common/common-image/src/main/java/com/twelvemonkeys/image/ResampleOp.java#L89
+//                BufferedImage bufferedImage = null
+//                if (maxOutputWidth != null && image.getRenderedImage().getWidth() > maxOutputWidth * 2) {
+//                    // Resize Image fast
+//                    bufferedImage = new ResampleOp(maxOutputWidth * 2, (maxOutputWidth * 2 * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), FILTER_POINT).filter(image.getRenderedImage(), null);
+//                }
 
                 if (outputResourceReferenceLarge != null) {
                     ec.logger.warn("saving outputResourceReferenceLarge to ${outputResourceReferenceLarge.getLocation()}")
                     // aspect ratio = pixel width / pixel height so new pixel height = new pixel width / aspect ratio if aspect ratio is pixel width / pixel height then new pixel height = new pixel width * (pixel height / pixel width)
-                    BufferedImageOp resampler = new ResampleOp(pixelWidthLarge, (pixelWidthLarge * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
+                    BufferedImageOp resampler = new ResampleOp(pixelWidthLarge, (pixelWidthLarge * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_TRIANGLE);
                     image.setRenderedImage(resampler.filter(image.getRenderedImage(), null))
-                    futureContentLocationLarge = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference: outputResourceReferenceLarge, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).callFuture();
+                    futureContentLocationLarge = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceLarge, outputImageFormat: outputImageFormat, inputImageFormat: inputImageFormat]).callFuture();
                 }
 
                 if (outputResourceReferenceMedium != null) {
                     ec.logger.warn("saving outputResourceReferenceMedium to ${outputResourceReferenceMedium.getLocation()}")
-                    BufferedImageOp resampler = new ResampleOp(pixelWidthMedium, (pixelWidthMedium * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
+                    BufferedImageOp resampler = new ResampleOp(pixelWidthMedium, (pixelWidthMedium * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_TRIANGLE);
                     image.setRenderedImage(resampler.filter(image.getRenderedImage(), null))
-                    futureContentLocationMedium = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference: outputResourceReferenceMedium, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).callFuture();
+                    futureContentLocationMedium = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceMedium, outputImageFormat: outputImageFormat, inputImageFormat: inputImageFormat]).callFuture();
                 }
 
                 if (outputResourceReferenceSmall != null) {
                     ec.logger.warn("saving outputResourceReferenceSmall to ${outputResourceReferenceSmall.getLocation()}")
-                    BufferedImageOp resampler = new ResampleOp(pixelWidthSmall, (pixelWidthSmall * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
+                    BufferedImageOp resampler = new ResampleOp(pixelWidthSmall, (pixelWidthSmall * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_TRIANGLE);
                     image.setRenderedImage(resampler.filter(image.getRenderedImage(), null))
-                    futureContentLocationSmall = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference: outputResourceReferenceSmall, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).callFuture();
+                    futureContentLocationSmall = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceSmall, outputImageFormat: outputImageFormat, inputImageFormat: inputImageFormat]).callFuture();
                 }
 
                 if (outputResourceReferenceThumbnail != null) {
                     ec.logger.warn("saving outputResourceReferenceThumbnail to ${outputResourceReferenceThumbnail.getLocation()}")
-                    BufferedImageOp resampler = new ResampleOp(pixelWidthThumbnail, (pixelWidthThumbnail * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_LANCZOS);
+                    BufferedImageOp resampler = new ResampleOp(pixelWidthThumbnail, (pixelWidthThumbnail * image.getRenderedImage().getHeight() / image.getRenderedImage().getWidth()).intValue(), ResampleOp.FILTER_TRIANGLE);
                     image.setRenderedImage(resampler.filter(image.getRenderedImage(), null))
-                    futureContentLocationThumbnail = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image:image, outputResourceReference: outputResourceReferenceThumbnail, outputImageFormat: outputImageFormat, inputImageFormat:inputImageFormat]).callFuture();
+                    futureContentLocationThumbnail = ec.service.async().name("org.moqui.impl.ImageServices.write#Image").parameters([image: image, outputResourceReference: outputResourceReferenceThumbnail, outputImageFormat: outputImageFormat, inputImageFormat: inputImageFormat]).callFuture();
                 }
 
                 contentLocationOriginal = futureContentLocationOriginal?.get()?.contentLocation;
@@ -141,6 +152,8 @@ along with this software (see the LICENSE.md file). If not, see
                 contentLocationMedium = futureContentLocationMedium?.get()?.contentLocation;
                 contentLocationSmall = futureContentLocationSmall?.get()?.contentLocation;
                 contentLocationThumbnail = futureContentLocationThumbnail?.get()?.contentLocation;
+
+                ec.logger.info("Finished ImageServices.convert took milliseconds " + (ec.user.getNowTimestamp().getTime() - startTimestamp.getTime()) )
 
 //                } catch (Throwable t ) {
 //                    logger.error("Error in convertImage", t)
